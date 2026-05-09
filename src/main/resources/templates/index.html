@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>PCF 任务看板</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 24px; background: #0f172a; color: #e2e8f0; }
+        h1 { font-size: 1.25rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.9rem; }
+        th, td { border-bottom: 1px solid #334155; padding: 8px; text-align: left; vertical-align: top; }
+        th { color: #94a3b8; font-weight: 600; }
+        a { color: #38bdf8; }
+        .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #1e293b; font-size: 0.75rem; }
+        video { max-width: 240px; max-height: 135px; border-radius: 8px; background: #020617; }
+        .muted { color: #94a3b8; font-size: 0.8rem; word-break: break-all; }
+    </style>
+</head>
+<body>
+<h1>Pulse-Content-Factory 任务状态</h1>
+<p class="muted">POST <code>/api/tasks</code> 提交 <code>{"text":"含链接的文本","platform":"douyin"}</code> 创建任务并异步执行。</p>
+<table>
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>平台</th>
+        <th>状态</th>
+        <th>分享链接</th>
+        <th>生成标题</th>
+        <th>预览</th>
+        <th>错误</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="t : ${tasks}">
+        <td th:text="${t.id}">1</td>
+        <td th:text="${t.platform}">douyin</td>
+        <td><span class="pill" th:text="${t.status}">0</span></td>
+        <td class="muted" th:text="${t.shareUrl}">url</td>
+        <td th:text="${t.titleGenerated}">title</td>
+        <td>
+            <video th:if="${t.localPath != null}" controls th:src="@{/preview/{id}/video(id=${t.id})}"></video>
+        </td>
+        <td class="muted" th:text="${t.errorMessage}"></td>
+    </tr>
+    </tbody>
+</table>
+</body>
+</html>

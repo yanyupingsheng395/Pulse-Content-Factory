@@ -1,0 +1,46 @@
+pcf:
+  work-dir: ${user.home}/.pcf
+  yt-dlp-path: yt-dlp
+  ffmpeg-path: ffmpeg
+  local-footage-dir: C:/MyFootage
+  deepseek:
+    base-url: https://api.deepseek.com
+    api-key: ${DEEPSEEK_API_KEY:}
+    model: deepseek-chat
+  siliconflow:
+    base-url: https://api.siliconflow.cn
+    api-key: ${SILICONFLOW_API_KEY:}
+    tts-path: /v1/audio/speech
+    model: ""
+  pexels:
+    api-key: ${PEXELS_API_KEY:}
+  playwright:
+    user-data-dir: ${pcf.work-dir}/playwright-user-data
+    headless: false
+  publish-enabled: false
+  publish:
+    min-delay-ms: 2000
+    max-delay-ms: 5000
+    douyin:
+      creator-url: https://creator.douyin.com/
+      upload-button-selector: ""
+      title-input-selector: ""
+      topic-input-selector: ""
+
+spring:
+  application:
+    name: pulse-content-factory
+  datasource:
+    url: jdbc:sqlite:${pcf.work-dir}/pcf.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+    database-platform: org.sqlite.hibernate.dialect.SQLiteDialect
+
+server:
+  port: 8080
