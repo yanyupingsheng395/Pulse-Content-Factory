@@ -19,4 +19,9 @@ public class PublishService {
         }
         douyinPublishFlow.publish(finalVideo, title, topics);
     }
+
+    /** 忽略 publishEnabled，由用户点击「手动发布」触发。 */
+    public void publishManual(Path finalVideo, String title, String topics) {
+        douyinPublishFlow.publish(finalVideo, title, topics);
+    }
 }

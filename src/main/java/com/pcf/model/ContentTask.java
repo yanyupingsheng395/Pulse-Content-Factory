@@ -42,6 +42,34 @@ public class ContentTask {
     @Column(name = "title_generated", length = 2000)
     private String titleGenerated;
 
+    /** DNA：原标题（yt-dlp 等） */
+    @Column(name = "dna_title", length = 2000)
+    private String dnaTitle;
+
+    /** DNA：描述/简介文案 */
+    @Column(name = "dna_description", length = 4000)
+    private String dnaDescription;
+
+    /** 仿写口播/脚本 */
+    @Column(name = "script_rewritten", length = 8000)
+    private String scriptRewritten;
+
+    /** 英文关键词，供 MPT video_terms */
+    @Column(name = "keywords_en", length = 2000)
+    private String keywordsEn;
+
+    /** MoneyPrinterTurbo task_id */
+    @Column(name = "external_job_id", length = 64)
+    private String externalJobId;
+
+    /** MPT 返回的可访问视频 URL */
+    @Column(name = "remote_video_url", length = 4000)
+    private String remoteVideoUrl;
+
+    /** 本任务使用的配音（可覆盖默认） */
+    @Column(name = "voice_name", length = 256)
+    private String voiceName;
+
     @Column(nullable = false)
     private Integer status = TaskStatus.PENDING.getCode();
 

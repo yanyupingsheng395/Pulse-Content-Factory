@@ -3,47 +3,327 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>PCF 任务看板</title>
+    <title>PCF · 内容克隆中枢</title>
     <style>
-        body { font-family: system-ui, sans-serif; margin: 24px; background: #0f172a; color: #e2e8f0; }
-        h1 { font-size: 1.25rem; }
-        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.9rem; }
-        th, td { border-bottom: 1px solid #334155; padding: 8px; text-align: left; vertical-align: top; }
-        th { color: #94a3b8; font-weight: 600; }
-        a { color: #38bdf8; }
-        .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #1e293b; font-size: 0.75rem; }
-        video { max-width: 240px; max-height: 135px; border-radius: 8px; background: #020617; }
-        .muted { color: #94a3b8; font-size: 0.8rem; word-break: break-all; }
+        :root {
+            --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
+            --accent: #38bdf8; --ok: #4ade80; --warn: #fbbf24; --border: #334155;
+            --step: #475569;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+        header {
+            padding: 12px 20px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+        }
+        header nav a { color: var(--accent); margin-right: 16px; text-decoration: none; }
+        header .mode { font-size: 12px; color: var(--muted); flex: 1; min-width: 0; }
+        header .header-settings {
+            flex-shrink: 0;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        header .header-settings:hover { background: rgba(56, 189, 248, 0.12); border-color: var(--accent); }
+        main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+        section { margin-bottom: 28px; }
+        h2 { font-size: 1rem; color: var(--muted); font-weight: 600; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; }
+        .drop-zone {
+            background: var(--card); border: 1px dashed var(--border); border-radius: 12px;
+            padding: 20px; display: flex; flex-direction: column; gap: 12px;
+        }
+        .drop-zone textarea {
+            width: 100%; min-height: 72px; padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+            background: #0f172a; color: var(--text); font-family: inherit; resize: vertical;
+        }
+        .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+        .row label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 4px; }
+        .row input { padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: #0f172a; color: var(--text); min-width: 200px; }
+        button.primary {
+            padding: 10px 22px; border: none; border-radius: 8px; background: var(--accent); color: #0f172a;
+            font-weight: 700; cursor: pointer; align-self: flex-end;
+        }
+        button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .msg { font-size: 13px; margin-top: 8px; min-height: 1.2em; }
+        .msg.err { color: #f87171; }
+        .msg.ok { color: var(--ok); }
+        table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        th { color: var(--muted); font-size: 12px; }
+        tr[data-id]:hover { background: rgba(56, 189, 248, 0.06); cursor: pointer; }
+        tr.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+        .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #334155; font-size: 11px; }
+        .pipeline { display: flex; gap: 4px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+        .pipeline i {
+            flex: 1; min-width: 36px; height: 6px; border-radius: 3px; background: var(--step);
+            max-width: 64px;
+        }
+        .pipeline i.on { background: var(--accent); }
+        .pipeline i.done { background: var(--ok); }
+        .btn-mini {
+            padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border);
+            background: transparent; color: var(--accent); cursor: pointer;
+        }
+        .btn-mini:hover { background: rgba(56, 189, 248, 0.12); }
+        .preview-panel {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+        }
+        @media (max-width: 800px) { .preview-panel { grid-template-columns: 1fr; } }
+        .preview-panel video { width: 100%; max-height: 360px; border-radius: 8px; background: #020617; }
+        .script-box { font-size: 13px; color: var(--muted); line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+        .script-box strong { color: var(--text); }
+        .muted { color: var(--muted); font-size: 12px; word-break: break-all; }
+        .play-cell button { margin-right: 6px; }
     </style>
 </head>
 <body>
-<h1>Pulse-Content-Factory 任务状态</h1>
-<p class="muted">POST <code>/api/tasks</code> 提交 <code>{"text":"含链接的文本","platform":"douyin"}</code> 创建任务并异步执行。</p>
-<table>
-    <thead>
-    <tr>
-        <th>ID</th>
-        <th>平台</th>
-        <th>状态</th>
-        <th>分享链接</th>
-        <th>生成标题</th>
-        <th>预览</th>
-        <th>错误</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr th:each="t : ${tasks}">
-        <td th:text="${t.id}">1</td>
-        <td th:text="${t.platform}">douyin</td>
-        <td><span class="pill" th:text="${t.status}">0</span></td>
-        <td class="muted" th:text="${t.shareUrl}">url</td>
-        <td th:text="${t.titleGenerated}">title</td>
-        <td>
-            <video th:if="${t.localPath != null}" controls th:src="@{/preview/{id}/video(id=${t.id})}"></video>
-        </td>
-        <td class="muted" th:text="${t.errorMessage}"></td>
-    </tr>
-    </tbody>
-</table>
+<header>
+    <nav>
+        <a href="/"><strong>PCF V2</strong></a>
+    </nav>
+    <span class="mode">渲染模式：
+        <strong th:if="${turboMode}">TURBO (MoneyPrinterTurbo)</strong>
+        <strong th:unless="${turboMode}">LOCAL (本机 FFmpeg)</strong>
+        · 默认配音 <code th:text="${defaultVoice}">—</code></span>
+    <a class="header-settings" th:href="@{/settings}" href="/settings">设置</a>
+</header>
+<main>
+    <section>
+        <h2>任务投放</h2>
+        <div class="drop-zone">
+            <label for="cloneUrl" style="font-size:12px;color:var(--muted);">粘贴含视频链接的文本或纯 URL</label>
+            <textarea id="cloneUrl" placeholder="例如：https://v.douyin.com/xxxxx/"></textarea>
+            <div class="row">
+                <label>配音 voice_name（可空）
+                    <input type="text" id="voiceName" placeholder="默认见设置页"/>
+                </label>
+                <label>原视频标题（可空，供 AI 参考）
+                    <input type="text" id="titleOriginal" placeholder="可选"/>
+                </label>
+                <button type="button" class="primary" id="btnClone">一键克隆</button>
+            </div>
+            <div class="msg" id="cloneMsg"></div>
+        </div>
+    </section>
+
+    <section>
+        <h2>处理流 · 任务列表 <span class="muted" style="font-weight:normal;">（点击行选中 · 自动刷新）</span></h2>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>阶段</th>
+                <th>平台</th>
+                <th>链接</th>
+                <th>生成标题</th>
+                <th>预览</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="taskBody"></tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>成品预览</h2>
+        <div class="preview-panel" id="previewPanel">
+            <div>
+                <video id="pvVideo" controls></video>
+            </div>
+            <div>
+                <p><strong>仿写文案 / 口播</strong></p>
+                <div class="script-box" id="pvScript">选中任务查看。</div>
+                <p style="margin-top:12px;"><strong>英文关键词</strong></p>
+                <div class="script-box" id="pvKw">—</div>
+            </div>
+        </div>
+    </section>
+</main>
+<script th:inline="javascript">
+(function () {
+    var STATUS_LABELS = {
+        0: '待处理', 1: '下载素材', 2: 'AI 文案', 3: '本机渲染', 4: '发布中', 5: '已完成',
+        '-1': '失败', 10: '解析 DNA', 11: 'AI 仿写', 12: 'Turbo 渲染', 13: '待分发'
+    };
+    var tasks = [];
+
+    function labelFor(st) {
+        var k = String(st);
+        return STATUS_LABELS[k] || ('状态 ' + st);
+    }
+
+    function turboPipelineSteps(st) {
+        st = Number(st);
+        var steps = [st >= 10, st >= 11, st >= 12, st >= 13, st === 5];
+        if (st === -1) return [false, false, false, false, false];
+        return steps;
+    }
+
+    function localPipelineSteps(st) {
+        st = Number(st);
+        var steps = [st >= 1, st >= 2, st >= 3, st >= 4 || st === 5, st === 5];
+        if (st === -1) return [false, false, false, false, false];
+        return steps;
+    }
+
+    var turboMode = /*[[${turboMode}]]*/ false;
+
+    function paintPipelines() {
+        document.querySelectorAll('.pipeline').forEach(function (el) {
+            var st = parseInt(el.getAttribute('data-pipeline'), 10);
+            var steps = turboMode ? turboPipelineSteps(st) : localPipelineSteps(st);
+            el.innerHTML = '';
+            steps.forEach(function (on, i) {
+                var seg = document.createElement('i');
+                if (on) seg.classList.add(st === 5 && i === 4 ? 'done' : 'on');
+                el.appendChild(seg);
+            });
+        });
+        document.querySelectorAll('.status-label').forEach(function (el) {
+            var st = el.getAttribute('data-st');
+            el.textContent = labelFor(st);
+        });
+    }
+
+    var selectedId = null;
+
+    function findTask(id) {
+        if (!tasks) return null;
+        for (var i = 0; i < tasks.length; i++) {
+            if (tasks[i].id === id) return tasks[i];
+        }
+        return null;
+    }
+
+    function showPreview(task) {
+        if (!task) return;
+        var v = document.getElementById('pvVideo');
+        if (task.localPath || task.remoteVideoUrl) {
+            v.src = '/preview/' + task.id + '/video';
+        } else {
+            v.removeAttribute('src');
+        }
+        document.getElementById('pvScript').textContent = task.scriptRewritten || task.titleGenerated || task.dnaDescription || '—';
+        document.getElementById('pvKw').textContent = task.keywordsEn || '—';
+    }
+
+    function selectRow(id) {
+        selectedId = id;
+        document.querySelectorAll('tr[data-id]').forEach(function (tr) {
+            tr.classList.toggle('selected', parseInt(tr.getAttribute('data-id'), 10) === id);
+        });
+        showPreview(findTask(id));
+    }
+
+    document.getElementById('taskBody').addEventListener('click', function (e) {
+        var tr = e.target.closest('tr[data-id]');
+        if (!tr) return;
+        if (e.target.classList.contains('btn-play') || e.target.classList.contains('btn-pub')) return;
+        selectRow(parseInt(tr.getAttribute('data-id'), 10));
+    });
+
+    document.getElementById('taskBody').addEventListener('click', function (e) {
+        if (e.target.classList.contains('btn-play')) {
+            var id = parseInt(e.target.getAttribute('data-play-id'), 10);
+            selectRow(id);
+            var v = document.getElementById('pvVideo');
+            v.pause();
+            v.load();
+            v.play().catch(function () {});
+            return;
+        }
+        if (e.target.classList.contains('btn-pub')) {
+            var pid = parseInt(e.target.getAttribute('data-pub-id'), 10);
+            fetch('/api/tasks/' + pid + '/publish', { method: 'POST' })
+                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (x) {
+                    if (!x.ok) alert(x.j.error || '发布失败');
+                    else refreshTasks();
+                });
+        }
+    });
+
+    document.getElementById('btnClone').addEventListener('click', function () {
+        var text = document.getElementById('cloneUrl').value.trim();
+        var msg = document.getElementById('cloneMsg');
+        msg.textContent = '';
+        msg.className = 'msg';
+        if (!text) {
+            msg.textContent = '请填写链接';
+            msg.classList.add('err');
+            return;
+        }
+        var btn = document.getElementById('btnClone');
+        btn.disabled = true;
+        fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: text,
+                platform: 'douyin',
+                titleOriginal: document.getElementById('titleOriginal').value.trim() || null,
+                voiceName: document.getElementById('voiceName').value.trim() || null
+            })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j, status: r.status }; }); })
+            .then(function (x) {
+                btn.disabled = false;
+                if (!x.ok) {
+                    msg.textContent = x.j.error || ('错误 ' + x.status);
+                    msg.classList.add('err');
+                    return;
+                }
+                msg.textContent = '任务已创建 id=' + x.j.id;
+                msg.classList.add('ok');
+                document.getElementById('cloneUrl').value = '';
+                refreshTasks();
+            }).catch(function () {
+                btn.disabled = false;
+                msg.textContent = '网络错误';
+                msg.classList.add('err');
+            });
+    });
+
+    function refreshTasks() {
+        fetch('/api/tasks')
+            .then(function (r) { return r.json(); })
+            .then(function (list) {
+                tasks = list;
+                var tb = document.getElementById('taskBody');
+                tb.innerHTML = '';
+                list.forEach(function (t) {
+                    var tr = document.createElement('tr');
+                    tr.setAttribute('data-id', t.id);
+                    if (selectedId === t.id) tr.classList.add('selected');
+                    var canPlay = t.localPath || t.remoteVideoUrl;
+                    var canPub = t.status === 13;
+                    tr.innerHTML =
+                        '<td>' + t.id + '</td>' +
+                        '<td><span class="pill status-label" data-st="' + t.status + '">' + t.status + '</span>' +
+                        '<div class="pipeline" data-pipeline="' + t.status + '"></div></td>' +
+                        '<td>' + (t.platform || '') + '</td>' +
+                        '<td class="muted">' + (t.shareUrl || '') + '</td>' +
+                        '<td>' + (t.titleGenerated || '') + '</td>' +
+                        '<td class="play-cell">' + (canPlay ? '<button type="button" class="btn-mini btn-play" data-play-id="' + t.id + '">▶ 播放</button>' : '<span class="muted">—</span>') + '</td>' +
+                        '<td>' + (canPub ? '<button type="button" class="btn-mini btn-pub" data-pub-id="' + t.id + '">手动发布</button>' : '') + '</td>';
+                    tb.appendChild(tr);
+                });
+                paintPipelines();
+                if (selectedId && findTask(selectedId)) showPreview(findTask(selectedId));
+                else if (list.length) selectRow(list[0].id);
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        refreshTasks();
+    });
+    setInterval(refreshTasks, 4000);
+})();
+</script>
 </body>
 </html>

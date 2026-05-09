@@ -28,6 +28,7 @@ public class RenderService {
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private final PcfProperties properties;
+    private final SettingsService settingsService;
     private final ObjectMapper objectMapper;
 
     private final OkHttpClient http = new OkHttpClient.Builder()
@@ -57,10 +58,10 @@ public class RenderService {
         if (StringUtil.isBlank(text)) {
             return false;
         }
-        if (StringUtil.isBlank(properties.getSiliconflow().getApiKey())) {
+        if (StringUtil.isBlank(settingsService.effectiveSiliconflowApiKey())) {
             return false;
         }
-        String base = trimSlash(properties.getSiliconflow().getBaseUrl());
+        String base = trimSlash(settingsService.effectiveSiliconflowBaseUrl());
         String path = properties.getSiliconflow().getTtsPath();
         if (!path.startsWith("/")) {
             path = "/" + path;
@@ -68,14 +69,14 @@ public class RenderService {
         String url = base + path;
 
         ObjectNode body = objectMapper.createObjectNode();
-        if (!StringUtil.isBlank(properties.getSiliconflow().getModel())) {
-            body.put("model", properties.getSiliconflow().getModel());
+        if (!StringUtil.isBlank(settingsService.effectiveSiliconflowModel())) {
+            body.put("model", settingsService.effectiveSiliconflowModel());
         }
         body.put("input", text);
 
         Request req = new Request.Builder()
                 .url(url)
-                .header("Authorization", "Bearer " + properties.getSiliconflow().getApiKey())
+                .header("Authorization", "Bearer " + settingsService.effectiveSiliconflowApiKey())
                 .post(RequestBody.create(JSON, body.toString().getBytes(StandardCharsets.UTF_8)))
                 .build();
 

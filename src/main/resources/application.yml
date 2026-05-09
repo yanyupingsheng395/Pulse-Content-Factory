@@ -3,6 +3,15 @@ pcf:
   yt-dlp-path: yt-dlp
   ffmpeg-path: ffmpeg
   local-footage-dir: C:/MyFootage
+  # LOCAL：本机 FFmpeg+TTS | TURBO：MoneyPrinterTurbo（设置页可覆盖）
+  render-mode: TURBO
+  moneyprinter-turbo:
+    # 与 MoneyPrinterTurbo FastAPI listen_port 一致，见对方 config.toml / 启动日志
+    base-url: http://127.0.0.1:8080
+    default-voice-name: zh-CN-XiaoxiaoNeural-Female
+    default-video-aspect: "9:16"
+    poll-interval-ms: 2000
+    poll-max-attempts: 600
   deepseek:
     base-url: https://api.deepseek.com
     api-key: ${DEEPSEEK_API_KEY:}

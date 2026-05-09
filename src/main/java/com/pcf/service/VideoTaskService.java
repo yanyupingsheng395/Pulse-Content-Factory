@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @Service
 @RequiredArgsConstructor
@@ -27,9 +28,12 @@ public class VideoTaskService {
     private final RenderService renderService;
     private final PublishService publishService;
     private final PcfProperties properties;
+    private final SettingsService settingsService;
+    private final DnaExtractionService dnaExtractionService;
+    private final MoneyPrinterTurboClient moneyPrinterTurboClient;
 
     @Transactional
-    public ContentTask createFromText(String rawText, String platform, String titleOriginal) {
+    public ContentTask createFromText(String rawText, String platform, String titleOriginal, String voiceName) {
         String url = LinkParserUtil.firstUrlOrNull(rawText);
         if (url == null) {
             throw new IllegalArgumentException("未在文本中解析到有效 http(s) 链接");
@@ -41,6 +45,9 @@ public class VideoTaskService {
         task.setPlatform(platform == null || StringUtil.isBlank(platform) ? "unknown" : platform);
         task.setShareUrl(url);
         task.setTitleOriginal(titleOriginal);
+        if (!StringUtil.isBlank(voiceName)) {
+            task.setVoiceName(voiceName.trim());
+        }
         task.setStatus(TaskStatus.PENDING.getCode());
         return taskRepository.save(task);
     }
@@ -52,14 +59,83 @@ public class VideoTaskService {
             return;
         }
         try {
-            runPipeline(task);
+            if (settingsService.isTurboMode()) {
+                runTurboPipeline(task);
+            } else {
+                runLocalPipeline(task);
+            }
         } catch (Exception e) {
             log.error("任务 {} 失败", taskId, e);
             markFailed(taskId, e);
         }
     }
 
-    private void runPipeline(ContentTask task) throws Exception {
+    @Async("taskExecutor")
+    public void publishManualAsync(Long taskId) {
+        ContentTask task = taskRepository.findById(taskId).orElse(null);
+        if (task == null) {
+            return;
+        }
+        try {
+            if (StringUtil.isBlank(task.getLocalPath())) {
+                throw new IllegalStateException("无本地成片路径，无法上传发布");
+            }
+            Path file = Paths.get(task.getLocalPath());
+            updateStatus(taskId, TaskStatus.PUBLISHING);
+            String title = task.getTitleGenerated() != null ? task.getTitleGenerated() : task.getTitleOriginal();
+            publishService.publishManual(file, title == null ? "" : title, "");
+            updateStatus(taskId, TaskStatus.COMPLETED);
+        } catch (Exception e) {
+            log.error("手动发布 {} 失败", taskId, e);
+            markFailed(taskId, e);
+        }
+    }
+
+    private void runTurboPipeline(ContentTask task) throws Exception {
+        Long id = task.getId();
+        updateStatus(id, TaskStatus.DNA_EXTRACTING);
+        DnaExtractionService.DnaResult dna = dnaExtractionService.extractMetadata(task.getShareUrl());
+        patchDna(id, dna.getTitle(), dna.getDescription());
+
+        String dnaTitle = dna.getTitle();
+        if (!StringUtil.isBlank(task.getTitleOriginal())) {
+            dnaTitle = task.getTitleOriginal();
+        }
+
+        updateStatus(id, TaskStatus.AI_REWRITING);
+        AIService.AiCloneResult clone = aiService.cloneRewrite(dnaTitle, dna.getDescription());
+        patchAiClone(id, clone.getGeneratedTitle(), clone.getGeneratedScript(), clone.getVideoKeywordsEn());
+
+        String voice = task.getVoiceName();
+        if (StringUtil.isBlank(voice)) {
+            voice = settingsService.effectiveDefaultVoice();
+        }
+        String aspect = settingsService.effectiveDefaultAspect();
+
+        ContentTask fresh = taskRepository.findById(id).orElse(task);
+        String subject = fresh.getTitleGenerated() != null ? fresh.getTitleGenerated() : clone.getGeneratedTitle();
+        String script = fresh.getScriptRewritten() != null ? fresh.getScriptRewritten() : clone.getGeneratedScript();
+        String terms = fresh.getKeywordsEn();
+
+        updateStatus(id, TaskStatus.TURBO_RENDERING);
+        String mptTaskId = moneyPrinterTurboClient.createVideoJob(subject, script, terms, voice, aspect);
+        patchExternalJob(id, mptTaskId);
+
+        String videoUrl = moneyPrinterTurboClient.pollUntilComplete(mptTaskId);
+        patchRemoteVideoUrl(id, videoUrl);
+
+        Path localOut = Paths.get(properties.getWorkDir(), "output", id + "_turbo.mp4");
+        try {
+            moneyPrinterTurboClient.downloadVideo(videoUrl, localOut);
+            patchLocalPath(id, localOut.toString());
+        } catch (Exception ex) {
+            log.warn("下载 Turbo 成片到本地失败，仍保留远程 URL: {}", ex.getMessage());
+        }
+
+        updateStatus(id, TaskStatus.READY_TO_PUBLISH);
+    }
+
+    private void runLocalPipeline(ContentTask task) throws Exception {
         Long id = task.getId();
         updateStatus(id, TaskStatus.DOWNLOADING);
         Path raw = analysisService.downloadAndPrepare(id, task.getShareUrl());
@@ -80,6 +156,37 @@ public class VideoTaskService {
         }
         publishService.publishIfEnabled(finalVideo, ai.getGeneratedTitle(), "");
         updateStatus(id, TaskStatus.COMPLETED);
+    }
+
+    private void patchDna(Long id, String title, String desc) {
+        taskRepository.findById(id).ifPresent(t -> {
+            t.setDnaTitle(title);
+            t.setDnaDescription(desc);
+            taskRepository.save(t);
+        });
+    }
+
+    private void patchAiClone(Long id, String genTitle, String script, String keywordsEn) {
+        taskRepository.findById(id).ifPresent(t -> {
+            t.setTitleGenerated(genTitle);
+            t.setScriptRewritten(script);
+            t.setKeywordsEn(keywordsEn);
+            taskRepository.save(t);
+        });
+    }
+
+    private void patchExternalJob(Long id, String jobId) {
+        taskRepository.findById(id).ifPresent(t -> {
+            t.setExternalJobId(jobId);
+            taskRepository.save(t);
+        });
+    }
+
+    private void patchRemoteVideoUrl(Long id, String url) {
+        taskRepository.findById(id).ifPresent(t -> {
+            t.setRemoteVideoUrl(url);
+            taskRepository.save(t);
+        });
     }
 
     private void patchGeneratedTitle(Long id, String generatedTitle) {
